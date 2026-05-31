@@ -1,0 +1,10 @@
+{
+  "block.powergridlights.floodlight": "Refletor Elétrico",
+
+  "itemGroup.powergridlights.main": "PowerGrid Luzes",
+
+  "tooltip.powergridlights.floodlight.rated_voltage": "Tensão Nominal: 120 V",
+  "tooltip.powergridlights.floodlight.power":         "Potência: ~10 W",
+  "tooltip.powergridlights.floodlight.range":         "Alcance: 16 blocos",
+  "tooltip.powergridlights.floodlight.cone":          "Largura do Cone: ±4 blocos"
+}
