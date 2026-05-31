@@ -1,0 +1,4 @@
+{
+  "comment": "The phantom light block has no geometry – it is invisible in the world.",
+  "parent": "block/air"
+}
