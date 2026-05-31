@@ -1,0 +1,10 @@
+{
+  "block.powergridlights.floodlight": "Electric Floodlight",
+
+  "itemGroup.powergridlights.main": "PowerGrid Lights",
+
+  "tooltip.powergridlights.floodlight.rated_voltage": "Rated Voltage: 120 V",
+  "tooltip.powergridlights.floodlight.power":         "Power: ~10 W",
+  "tooltip.powergridlights.floodlight.range":         "Light Range: 16 blocks",
+  "tooltip.powergridlights.floodlight.cone":          "Cone Width: ±4 blocks"
+}
