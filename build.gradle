@@ -1,0 +1,103 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.28'
+}
+
+version = "${mod_version}"
+group = "${mod_group}"
+
+base {
+    archivesName = "${mod_id}-${minecraft_version}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
+    withSourcesJar()
+}
+
+neoForge {
+    version = "${neoforge_version}"
+
+    parchment {
+        mappingsVersion = "2024.11.17"
+        minecraftVersion = "1.21.1"
+    }
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', mod_id,
+                    '--all',
+                    '--output', file('src/generated/resources/').getAbsolutePath(),
+                    '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
+    }
+    maven {
+        name = "CurseMaven"
+        url = "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+    maven {
+        name = "TerraformersMC"
+        url = "https://maven.terraformersmc.com/releases"
+    }
+}
+
+dependencies {
+    // PowerGrid - adjust artifact id if needed for NeoForge port
+    // Use the correct artifact from CurseForge/Modrinth once available for 1.21.1
+    // compileOnly "maven.modrinth:power-grid:${powergrid_version}-neoforge"
+
+    // Create mod dependency (PowerGrid requires Create)
+    // compileOnly "maven.modrinth:create-fabric:${create_version}"
+
+    // If you want Shine compat (optional, compile-time optional)
+    // compileOnly "maven.modrinth:shine:1.0.0+1.21.1-neoforge"
+}
+
+// Make the JAR include the mod's resources
+processResources {
+    var replaceProperties = [
+        mod_id           : mod_id,
+        mod_name         : mod_name,
+        mod_version      : mod_version,
+        mod_description  : mod_description,
+        mod_authors      : mod_authors,
+        minecraft_version: minecraft_version,
+        neoforge_version : neoforge_version,
+        loader           : loader,
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
