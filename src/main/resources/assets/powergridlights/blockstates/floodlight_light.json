@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "powergridlights:block/floodlight_light" }
+  }
+}
