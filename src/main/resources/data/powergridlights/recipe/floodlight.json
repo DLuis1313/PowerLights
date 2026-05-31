@@ -1,0 +1,19 @@
+{
+  "__comment": "Floodlight crafting recipe. Adjust ingredients to taste.",
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IGI",
+    "GCG",
+    "IGI"
+  ],
+  "key": {
+    "I": { "item": "minecraft:iron_ingot" },
+    "G": { "item": "minecraft:glass_pane" },
+    "C": { "item": "minecraft:redstone" }
+  },
+  "result": {
+    "count": 1,
+    "id": "powergridlights:floodlight"
+  }
+}
