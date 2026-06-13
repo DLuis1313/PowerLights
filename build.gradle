@@ -29,48 +29,38 @@ neoForge {
 }
 
 repositories {
-    // Maven do NeoForge (já incluído pelo plugin, mas explicitando para clareza)
-    maven { url = 'https://maven.neoforged.net/releases' }
-
-    // Modrinth maven – para Create e dependências
     maven {
-        name = 'Modrinth'
-        url  = 'https://api.modrinth.com/maven'
-        content { includeGroup 'maven.modrinth' }
+        name = 'CreateMod'
+        url  = 'https://maven.createmod.net'
     }
-
-    // CurseMaven – alternativa para pegar dependências pelo CurseForge ID
     maven {
-        name = 'CurseMaven'
-        url  = 'https://cursemaven.com'
-        content { includeGroup 'curse.maven' }
+        name = 'Ithundxr'
+        url  = 'https://maven.ithundxr.dev/snapshots'
     }
 }
 
 dependencies {
-    // ── PowerGrid ──────────────────────────────────────────────────────────
-    // Coloque o jar do PowerGrid na pasta libs/ do projeto e commite junto.
-    // Ele NÃO está em nenhum maven público ainda.
+    // PowerGrid (jar local – deve estar na pasta libs/ do repositório)
     implementation files('libs/powergrid-mc1_21_1-0_5_5_1.jar')
 
-    // ── Create (NeoForge 1.21.1) ───────────────────────────────────────────
-    // Necessário para IBE, SmartBlockEntity, VoxelShaper (catnip) etc.
-    // Versão mais recente disponível no Modrinth para 1.21.1:
-    implementation "maven.modrinth:create-neoforge:0.5.1.h-1.21.1-neoforge"
-
-    // Se o Modrinth não resolver, use o CurseMaven:
-    // implementation "curse.maven:create-1078384:XXXXXXX"
+    // Create NeoForge 1.21.1 – necessário para IBE, SmartBlockEntity, VoxelShaper etc.
+    compileOnly("com.simibubi.create:create-1.21.1:6.0.10-280:slim") {
+        transitive = false
+    }
+    compileOnly "net.createmod.ponder:ponder-neoforge:1.0.82+mc1.21.1"
+    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6"
+    compileOnly "com.tterrag.registrate:Registrate:MC1.21-1.3.0+67"
 }
 
 processResources {
     def props = [
-        mod_id          : mod_id,
-        mod_name        : mod_name,
-        mod_version     : mod_version,
-        mod_description : mod_description,
-        mod_authors     : mod_authors,
+        mod_id           : mod_id,
+        mod_name         : mod_name,
+        mod_version      : mod_version,
+        mod_description  : mod_description,
+        mod_authors      : mod_authors,
         minecraft_version: minecraft_version,
-        neoforge_version: neoforge_version,
+        neoforge_version : neoforge_version,
     ]
     inputs.properties props
     filesMatching('META-INF/neoforge.mods.toml') { expand props }
