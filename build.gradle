@@ -3,7 +3,7 @@ plugins {
 }
 
 version = "${mod_version}"
-group = "${mod_group}"
+group   = "${mod_group}"
 
 base {
     archivesName = "${mod_id}-${minecraft_version}"
@@ -11,36 +11,14 @@ base {
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
-    withSourcesJar()
 }
 
 neoForge {
     version = "${neoforge_version}"
 
-    parchment {
-        mappingsVersion = "2024.11.17"
-        minecraftVersion = "1.21.1"
-    }
-
     runs {
-        client {
-            client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
-        }
-
-        server {
-            server()
-            programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
-        }
-
-        data {
-            data()
-            programArguments.addAll '--mod', mod_id,
-                    '--all',
-                    '--output', file('src/generated/resources/').getAbsolutePath(),
-                    '--existing', file('src/main/resources/').getAbsolutePath()
-        }
+        client { client() }
+        server { server(); programArgument '--nogui' }
     }
 
     mods {
@@ -51,53 +29,49 @@ neoForge {
 }
 
 repositories {
+    // Maven do NeoForge (já incluído pelo plugin, mas explicitando para clareza)
+    maven { url = 'https://maven.neoforged.net/releases' }
+
+    // Modrinth maven – para Create e dependências
     maven {
-        name = "Modrinth"
-        url = "https://api.modrinth.com/maven"
-        content {
-            includeGroup "maven.modrinth"
-        }
+        name = 'Modrinth'
+        url  = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
     }
+
+    // CurseMaven – alternativa para pegar dependências pelo CurseForge ID
     maven {
-        name = "CurseMaven"
-        url = "https://cursemaven.com"
-        content {
-            includeGroup "curse.maven"
-        }
-    }
-    maven {
-        name = "TerraformersMC"
-        url = "https://maven.terraformersmc.com/releases"
+        name = 'CurseMaven'
+        url  = 'https://cursemaven.com'
+        content { includeGroup 'curse.maven' }
     }
 }
 
 dependencies {
-    // PowerGrid - adjust artifact id if needed for NeoForge port
-    // Use the correct artifact from CurseForge/Modrinth once available for 1.21.1
-    // compileOnly "maven.modrinth:power-grid:${powergrid_version}-neoforge"
+    // ── PowerGrid ──────────────────────────────────────────────────────────
+    // Coloque o jar do PowerGrid na pasta libs/ do projeto e commite junto.
+    // Ele NÃO está em nenhum maven público ainda.
+    implementation files('libs/powergrid-mc1_21_1-0_5_5_1.jar')
 
-    // Create mod dependency (PowerGrid requires Create)
-    // compileOnly "maven.modrinth:create-fabric:${create_version}"
+    // ── Create (NeoForge 1.21.1) ───────────────────────────────────────────
+    // Necessário para IBE, SmartBlockEntity, VoxelShaper (catnip) etc.
+    // Versão mais recente disponível no Modrinth para 1.21.1:
+    implementation "maven.modrinth:create-neoforge:0.5.1.h-1.21.1-neoforge"
 
-    // If you want Shine compat (optional, compile-time optional)
-    // compileOnly "maven.modrinth:shine:1.0.0+1.21.1-neoforge"
+    // Se o Modrinth não resolver, use o CurseMaven:
+    // implementation "curse.maven:create-1078384:XXXXXXX"
 }
 
-// Make the JAR include the mod's resources
 processResources {
-    var replaceProperties = [
-        mod_id           : mod_id,
-        mod_name         : mod_name,
-        mod_version      : mod_version,
-        mod_description  : mod_description,
-        mod_authors      : mod_authors,
+    def props = [
+        mod_id          : mod_id,
+        mod_name        : mod_name,
+        mod_version     : mod_version,
+        mod_description : mod_description,
+        mod_authors     : mod_authors,
         minecraft_version: minecraft_version,
-        neoforge_version : neoforge_version,
-        loader           : loader,
+        neoforge_version: neoforge_version,
     ]
-    inputs.properties replaceProperties
-
-    filesMatching(['META-INF/neoforge.mods.toml']) {
-        expand replaceProperties
-    }
+    inputs.properties props
+    filesMatching('META-INF/neoforge.mods.toml') { expand props }
 }
