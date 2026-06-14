@@ -20,6 +20,11 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
+      - name: Verificar libs/
+        run: |
+          echo "=== Conteúdo de libs/ ==="
+          ls -lh libs/ || echo "PASTA VAZIA OU NAO EXISTE"
+
       - name: Install PowerGrid to Maven Local
         run: |
           mkdir -p ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1
