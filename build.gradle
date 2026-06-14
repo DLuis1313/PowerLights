@@ -29,6 +29,7 @@ neoForge {
 }
 
 repositories {
+    mavenLocal() // PowerGrid instalado pelo workflow
     maven {
         name = 'CreateMod'
         url  = 'https://maven.createmod.net'
@@ -39,23 +40,17 @@ repositories {
     }
 }
 
-def powergridJar = file('libs/powergrid-mc1_21_1-0_5_5_1.jar')
-
 dependencies {
-    implementation files(powergridJar)
+    // PowerGrid — instalado no Maven Local pelo step do workflow
+    compileOnly 'org.patryk3211:powergrid:0.5.5.1'
 
+    // Create — necessário para IBE, SmartBlockEntity, VoxelShaper etc.
     compileOnly("com.simibubi.create:create-1.21.1:6.0.10-280:slim") {
         transitive = false
     }
     compileOnly "net.createmod.ponder:ponder-neoforge:1.0.82+mc1.21.1"
     compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6"
     compileOnly "com.tterrag.registrate:Registrate:MC1.21-1.3.0+67"
-}
-
-// O plugin NeoForge ModDev v2 às vezes não inclui jars locais
-// no classpath de compilação; forçamos aqui explicitamente.
-tasks.withType(JavaCompile).configureEach {
-    classpath += files(powergridJar)
 }
 
 processResources {
