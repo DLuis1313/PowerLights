@@ -29,7 +29,11 @@ neoForge {
 }
 
 repositories {
-    mavenLocal() // PowerGrid instalado pelo workflow
+    maven {
+        name = 'CurseMaven'
+        url  = 'https://cursemaven.com'
+        content { includeGroup 'curse.maven' }
+    }
     maven {
         name = 'CreateMod'
         url  = 'https://maven.createmod.net'
@@ -41,8 +45,8 @@ repositories {
 }
 
 dependencies {
-    // PowerGrid — instalado no Maven Local pelo step do workflow
-    compileOnly 'org.patryk3211:powergrid:0.5.5.1'
+    // PowerGrid 0.5.5.1 NeoForge 1.21.1 — direto do CurseForge, sem jar local
+    compileOnly 'curse.maven:power-grid-1321420:6890804'
 
     // Create — necessário para IBE, SmartBlockEntity, VoxelShaper etc.
     compileOnly("com.simibubi.create:create-1.21.1:6.0.10-280:slim") {
