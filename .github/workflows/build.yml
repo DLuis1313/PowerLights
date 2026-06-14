@@ -1,74 +1,66 @@
-plugins {
-    id 'net.neoforged.moddev' version '2.0.80'
-}
+name: Build
 
-version = "${mod_version}"
-group   = "${mod_group}"
+on:
+  push:
+    branches: ["main", "dev"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
 
-base {
-    archivesName = "${mod_id}-${minecraft_version}"
-}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
-}
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
 
-neoForge {
-    version = "${neoforge_version}"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.8"
 
-    runs {
-        client { client() }
-        server { server(); programArgument '--nogui' }
-    }
+      - name: Build
+        run: gradle build --no-daemon
 
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
-        }
-    }
-}
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: powergridlights-${{ github.sha }}
+          path: build/libs/*.jar
+          if-no-files-found: error
 
-repositories {
-    maven {
-        name = 'CreateMod'
-        url  = 'https://maven.createmod.net'
-    }
-    maven {
-        name = 'Ithundxr'
-        url  = 'https://maven.ithundxr.dev/snapshots'
-    }
-}
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-def powergridJar = files('libs/powergrid-mc1_21_1-0_5_5_1.jar')
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
 
-dependencies {
-    compileOnly("com.simibubi.create:create-1.21.1:6.0.10-280:slim") {
-        transitive = false
-    }
-    compileOnly "net.createmod.ponder:ponder-neoforge:1.0.82+mc1.21.1"
-    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6"
-    compileOnly "com.tterrag.registrate:Registrate:MC1.21-1.3.0+67"
-}
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.8"
 
-// Adiciona o jar do PowerGrid DIRETAMENTE ao sourceset de compilação
-// Esta é a forma mais garantida, independente do plugin NeoForge
-sourceSets {
-    main {
-        compileClasspath += powergridJar
-        runtimeClasspath += powergridJar
-    }
-}
+      - name: Build
+        run: gradle build --no-daemon
 
-processResources {
-    def props = [
-        mod_id           : mod_id,
-        mod_name         : mod_name,
-        mod_version      : mod_version,
-        mod_description  : mod_description,
-        mod_authors      : mod_authors,
-        minecraft_version: minecraft_version,
-        neoforge_version : neoforge_version,
-    ]
-    inputs.properties props
-    filesMatching('META-INF/neoforge.mods.toml') { expand props }
-}
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
+          generate_release_notes: true
