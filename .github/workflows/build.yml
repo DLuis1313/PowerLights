@@ -20,6 +20,21 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
+      - name: Install PowerGrid to Maven Local
+        run: |
+          mkdir -p ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1
+          cp libs/powergrid-mc1_21_1-0_5_5_1.jar \
+             ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1/powergrid-0.5.5.1.jar
+          cat > ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1/powergrid-0.5.5.1.pom << 'POM'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project>
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>org.patryk3211</groupId>
+            <artifactId>powergrid</artifactId>
+            <version>0.5.5.1</version>
+          </project>
+          POM
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -50,6 +65,21 @@ jobs:
         with:
           java-version: "21"
           distribution: "temurin"
+
+      - name: Install PowerGrid to Maven Local
+        run: |
+          mkdir -p ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1
+          cp libs/powergrid-mc1_21_1-0_5_5_1.jar \
+             ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1/powergrid-0.5.5.1.jar
+          cat > ~/.m2/repository/org/patryk3211/powergrid/0.5.5.1/powergrid-0.5.5.1.pom << 'POM'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project>
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>org.patryk3211</groupId>
+            <artifactId>powergrid</artifactId>
+            <version>0.5.5.1</version>
+          </project>
+          POM
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
