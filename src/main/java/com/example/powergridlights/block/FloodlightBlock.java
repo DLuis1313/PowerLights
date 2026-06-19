@@ -2,11 +2,12 @@ package com.example.powergridlights.block;
 
 import com.example.powergridlights.blockentity.FloodlightBlockEntity;
 import com.example.powergridlights.registry.PGLBlockEntities;
-import com.mojang.serialization.MapCodec;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.block.BaseEntityBlock;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,51 +21,50 @@ import org.patryk3211.powergrid.electricity.base.TerminalBoundingBox;
 /**
  * Refletor elétrico direcional.
  *
- * Extende DirectionalElectricBlock (que já carrega FACING, VoxelShaper rotacionado,
- * e o helper directionalNorthTerminals para montar o BlockStateTerminalCollection).
+ * Estende DirectionalElectricBlock que:
+ *  - Fornece a propriedade FACING
+ *  - Gera o BlockStateTerminalCollection rotacionado automaticamente
+ *  - Não estende BaseEntityBlock → não precisa de codec()
  *
- * Os dois TerminalBoundingBox batem com os cubos do grupo "Power" no modelo:
- *   TERM_L  →  from [4,1,10] to [6,2,12]   (plug esquerdo)
- *   TERM_N  →  from [10,1,10] to [12,2,12]  (plug direito)
+ * directionalNorthTerminals(Block, TerminalBoundingBox[], VoxelShape) → 3 args.
+ * A VoxelShape é usada para TODAS as direções (o helper cria variantes rotacionadas).
  */
 public class FloodlightBlock extends DirectionalElectricBlock implements IBE<FloodlightBlockEntity> {
 
     public static final BooleanProperty LIT = BlockStateProperties.LIT;
 
-    // ── Terminais (coordenadas do modelo divididas por 16) ─────────────────
+    // Plugs do modelo (coordenadas do Blockbench / 16)
+    // Plug L (esquerdo): from [4,1,10] to [6,2,12]
     private static final TerminalBoundingBox TERM_L = new TerminalBoundingBox(
             Component.literal("L"),
             4/16.0, 1/16.0, 10/16.0,
-            6/16.0, 2/16.0, 12/16.0
-    );
+            6/16.0, 2/16.0, 12/16.0);
+
+    // Plug N (direito): from [10,1,10] to [12,2,12]
     private static final TerminalBoundingBox TERM_N = new TerminalBoundingBox(
             Component.literal("N"),
             10/16.0, 1/16.0, 10/16.0,
-            12/16.0, 2/16.0, 12/16.0
-    );
+            12/16.0, 2/16.0, 12/16.0);
 
-    // ── Shape base (facing NORTH) ──────────────────────────────────────────
-    private static final VoxelShape NORTH_SHAPE = Block.box(3, 0, 3, 13, 9, 13);
+    // Shape do modelo (caixa geral, válida para NORTH)
+    private static final VoxelShape SHAPE = Block.box(3, 0, 3, 13, 9, 13);
 
     public FloodlightBlock(Properties properties) {
         super(properties);
 
-        // Registra os terminais para TODAS as direções (o helper rotaciona automaticamente)
+        // 3 args: block, terminais[], shape base (o helper rotaciona para todos os facings)
         setTerminalCollection(
             DirectionalElectricBlock.directionalNorthTerminals(
                 this,
                 new TerminalBoundingBox[]{ TERM_L, TERM_N },
-                NORTH_SHAPE,  // shape quando FACING=NORTH/SOUTH/EAST/WEST
-                NORTH_SHAPE   // shape quando FACING=UP/DOWN
+                SHAPE
             ).build()
         );
 
         registerDefaultState(stateDefinition.any()
-                .setValue(FACING, net.minecraft.core.Direction.NORTH)
+                .setValue(FACING, Direction.NORTH)
                 .setValue(LIT, false));
     }
-
-    // ── BlockState ─────────────────────────────────────────────────────────
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
@@ -72,14 +72,7 @@ public class FloodlightBlock extends DirectionalElectricBlock implements IBE<Flo
         builder.add(LIT);
     }
 
-    // ── Codec (obrigatório em BaseEntityBlock no 1.21.1) ──────────────────
-
-    @Override
-    protected MapCodec<? extends BaseEntityBlock> codec() {
-        return simpleCodec(FloodlightBlock::new);
-    }
-
-    // ── IBE ────────────────────────────────────────────────────────────────
+    // ── IBE ──────────────────────────────────────────────────────────────────
 
     @Override
     public Class<FloodlightBlockEntity> getBlockEntityClass() {
@@ -91,11 +84,24 @@ public class FloodlightBlock extends DirectionalElectricBlock implements IBE<Flo
         return PGLBlockEntities.FLOODLIGHT_BLOCK_ENTITY.get();
     }
 
-    // ── Utilidade ──────────────────────────────────────────────────────────
+    // ── Limpeza de luzes ao remover o bloco ──────────────────────────────────
+    // (setRemoved() é final em SmartBlockEntity → usamos onRemove() no bloco)
 
-    /** Chamado pelo BlockEntity para mudar o estado LIT sem loop infinito. */
-    public static void setLit(net.minecraft.world.level.Level level,
-                               BlockPos pos, BlockState state, boolean lit) {
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos,
+                         BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock())
+                && level instanceof ServerLevel sl
+                && level.getBlockEntity(pos) instanceof FloodlightBlockEntity be) {
+            be.removeLights(sl);
+            setLit(sl, pos, state, false);
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    // ── Utilidades ────────────────────────────────────────────────────────────
+
+    public static void setLit(Level level, BlockPos pos, BlockState state, boolean lit) {
         if (state.getValue(LIT) != lit)
             level.setBlock(pos, state.setValue(LIT, lit), Block.UPDATE_ALL);
     }
