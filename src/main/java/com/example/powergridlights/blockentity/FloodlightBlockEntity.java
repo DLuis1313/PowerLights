@@ -9,13 +9,10 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import org.jetbrains.annotations.Nullable;
 import org.patryk3211.powergrid.electricity.base.ElectricBlockEntity;
 import org.patryk3211.powergrid.electricity.base.IElectricEntity;
 import org.patryk3211.powergrid.electricity.base.ThermalBehaviour;
-import org.patryk3211.powergrid.electricity.sim.AbstractElectricWire;
 import org.patryk3211.powergrid.electricity.sim.ElectricWire;
 
 import java.util.ArrayList;
@@ -24,130 +21,82 @@ import java.util.List;
 /**
  * BlockEntity do Refletor Elétrico.
  *
- * Extende ElectricBlockEntity (Create/PowerGrid SmartBlockEntity com ElectricBehaviour).
- * O método chave é buildCircuit(): é chamado pelo PowerGrid toda vez que o bloco
- * entra em uma rede elétrica. Aqui definimos 2 terminais e conectamos com um resistor.
- *
- * Circuito:
- *   Terminal 0 (TERM_L, plug esquerdo)  ──[R=1440Ω]──  Terminal 1 (TERM_N, plug direito)
- *
- * A 120V a potência é V²/R = 14400/1440 = 10W.
+ * Notas importantes sobre a API do PowerGrid (extraídas do jar):
+ *  - buildCircuit() e electricalTick() são chamados via reflection → sem @Override
+ *  - applyPower(AbstractElectricWire) é package-private → não sobrescrever
+ *  - connect(float, IElectricNode, IElectricNode): resistência é o 1º argumento
+ *  - wire.potentialDifference() retorna double com a tensão
+ *  - SmartBlockEntity: saveAdditional/setRemoved são final → usar write/read
  */
 public class FloodlightBlockEntity extends ElectricBlockEntity implements IElectricEntity {
 
-    // ── Parâmetros elétricos ────────────────────────────────────────────────
-    private static final double RESISTANCE  = 1440.0; // Ω  →  10W @ 120V
-    private static final double MIN_VOLTAGE =   30.0; // V  abaixo disso apaga
+    private static final float  RESISTANCE  = 1440.0f; // 10 W @ 120 V
+    private static final double MIN_VOLTAGE =   30.0;
+    private static final int    LIGHT_RANGE =   16;
+    private static final int    CONE_WIDTH  =    4;
 
-    // ── Cone de luz ──────────────────────────────────────────────────────────
-    private static final int LIGHT_RANGE      = 16;  // blocos à frente
-    private static final int CONE_HALF_WIDTH  =  4;  // ±blocos na extremidade
-
-    // ── Estado interno ───────────────────────────────────────────────────────
     private ElectricWire wire;
     private boolean isLit = false;
     private final List<BlockPos> placedLights = new ArrayList<>();
 
-    // ────────────────────────────────────────────────────────────────────────
-    public FloodlightBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
-        super(type, pos, state);
-    }
-
-    // Construtor sem tipo explícito (chamado pelo registro via lambda)
     public FloodlightBlockEntity(BlockPos pos, BlockState state) {
-        this(PGLBlockEntities.FLOODLIGHT_BLOCK_ENTITY.get(), pos, state);
+        super(PGLBlockEntities.FLOODLIGHT_BLOCK_ENTITY.get(), pos, state);
     }
 
-    // ── API do PowerGrid ─────────────────────────────────────────────────────
+    // ── PowerGrid: chamados via reflection ────────────────────────────────────
 
-    /**
-     * PowerGrid chama este método quando o bloco entra em uma rede elétrica.
-     * Criamos 2 nós (um por terminal) e os conectamos com um resistor fixo.
-     */
-    @Override
     public void buildCircuit(IElectricEntity.CircuitBuilder builder) {
         builder.setTerminalCount(2);
-        var nodeL = builder.terminalNode(0); // terminal TERM_L (plug esquerdo)
-        var nodeN = builder.terminalNode(1); // terminal TERM_N (plug direito)
-        wire = builder.connect(nodeL, nodeN);
-        wire.setResistance(RESISTANCE);
+        wire = builder.connect(RESISTANCE, builder.terminalNode(0), builder.terminalNode(1));
     }
 
-    /**
-     * Chamado a cada tick elétrico (sincronizado com a simulação da rede).
-     * Aqui lemos a tensão e atualizamos o estado de iluminação.
-     */
-    @Override
     public void electricalTick() {
-        if (wire == null) return;
-
-        double voltage = Math.abs(wire.potentialDifference());
-        boolean shouldBeLit = voltage >= MIN_VOLTAGE;
-
-        if (shouldBeLit != isLit) {
-            isLit = shouldBeLit;
-            if (level instanceof ServerLevel sl) {
-                updateLights(sl);
-            }
-        }
+        if (wire == null || level == null || level.isClientSide()) return;
+        boolean on = Math.abs(wire.potentialDifference()) >= MIN_VOLTAGE;
+        if (on == isLit) return;
+        isLit = on;
+        if (level instanceof ServerLevel sl) updateLights(sl);
     }
 
-    /**
-     * PowerGrid chama este método para aplicar potência/calor ao bloco.
-     * Delegamos para o comportamento térmico da superclasse.
-     */
+    // ── PowerGrid: sobrescrita normal ─────────────────────────────────────────
+
     @Override
-    public void applyPower(AbstractElectricWire w) {
-        super.applyPower(w);
+    public float getResistance() {
+        return RESISTANCE;
     }
 
-    /** Sem aquecimento térmico para o refletor (não esquenta). */
     @Override
-    @Nullable
     public ThermalBehaviour specifyThermalBehaviour() {
         return null;
     }
 
-    // ── Cone de luz ──────────────────────────────────────────────────────────
+    // ── Cone de luz ───────────────────────────────────────────────────────────
 
-    private void updateLights(ServerLevel level) {
-        removePlacedLights(level);
-        FloodlightBlock.setLit(level, worldPosition, getBlockState(), isLit);
-        if (!isLit) return;
-
-        Direction facing = getBlockState().getValue(FloodlightBlock.FACING);
-        placeLightCone(level, facing);
+    private void updateLights(ServerLevel sl) {
+        removeLights(sl);
+        FloodlightBlock.setLit(sl, worldPosition, getBlockState(), isLit);
+        if (isLit) placeLightCone(sl, getBlockState().getValue(FloodlightBlock.FACING));
     }
 
-    private void placeLightCone(ServerLevel level, Direction facing) {
-        // Eixos perpendiculares à direção do feixe
-        Direction perp1, perp2;
-        if (facing.getAxis() == Direction.Axis.Y) {
-            perp1 = Direction.EAST;
-            perp2 = Direction.SOUTH;
-        } else {
-            perp1 = facing.getClockWise();
-            perp2 = Direction.UP;
-        }
+    private void placeLightCone(ServerLevel sl, Direction dir) {
+        Direction p1 = dir.getAxis() == Direction.Axis.Y ? Direction.EAST  : dir.getClockWise();
+        Direction p2 = dir.getAxis() == Direction.Axis.Y ? Direction.SOUTH : Direction.UP;
 
-        for (int dist = 1; dist <= LIGHT_RANGE; dist++) {
-            // Nível de luz diminui com a distância (15 → 1)
-            int lightLevel = 15 - (int)((14.0 * (dist - 1)) / (LIGHT_RANGE - 1));
-            if (lightLevel < 1) break;
+        for (int d = 1; d <= LIGHT_RANGE; d++) {
+            int lvl  = Math.max(1, 15 - (int)(14.0 * (d - 1) / (LIGHT_RANGE - 1)));
+            int half = Math.max(1, (int)Math.ceil(CONE_WIDTH * d / (double) LIGHT_RANGE));
+            BlockPos centre = worldPosition.relative(dir, d);
 
-            int halfWidth = (int) Math.ceil(CONE_HALF_WIDTH * dist / (double) LIGHT_RANGE);
-            BlockPos center = worldPosition.relative(facing, dist);
-
-            for (int a = -halfWidth; a <= halfWidth; a++) {
-                for (int b = -halfWidth; b <= halfWidth; b++) {
-                    BlockPos candidate = center.relative(perp1, a).relative(perp2, b);
-                    BlockState existing = level.getBlockState(candidate);
-                    if (existing.isAir() || existing.is(PGLBlocks.FLOODLIGHT_LIGHT.get())) {
-                        level.setBlock(candidate,
+            for (int a = -half; a <= half; a++) {
+                for (int b = -half; b <= half; b++) {
+                    BlockPos p = centre.relative(p1, a).relative(p2, b);
+                    BlockState cur = sl.getBlockState(p);
+                    if (cur.isAir() || cur.is(PGLBlocks.FLOODLIGHT_LIGHT.get())) {
+                        sl.setBlock(p,
                             PGLBlocks.FLOODLIGHT_LIGHT.get().defaultBlockState()
-                                .setValue(FloodlightLightBlock.LEVEL, lightLevel),
+                                     .setValue(FloodlightLightBlock.LEVEL, lvl),
                             Block.UPDATE_CLIENTS);
-                        placedLights.add(candidate);
+                        placedLights.add(p);
                     }
                 }
             }
@@ -155,55 +104,46 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
         setChanged();
     }
 
-    private void removePlacedLights(ServerLevel level) {
-        for (BlockPos pos : placedLights) {
-            if (level.getBlockState(pos).is(PGLBlocks.FLOODLIGHT_LIGHT.get()))
-                level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
-                               Block.UPDATE_CLIENTS);
-        }
-        placedLights.clear();
+    /** Público para ser chamado por FloodlightBlock.onRemove(). */
+    public void removeLights(ServerLevel sl) {
+        placedLights.removeIf(p -> {
+            if (sl.getBlockState(p).is(PGLBlocks.FLOODLIGHT_LIGHT.get()))
+                sl.removeBlock(p, false);
+            return true;
+        });
     }
 
-    // ── Ciclo de vida ────────────────────────────────────────────────────────
+    // ── NBT ───────────────────────────────────────────────────────────────────
 
     @Override
-    public void setRemoved() {
-        if (level instanceof ServerLevel sl) {
-            removePlacedLights(sl);
-            FloodlightBlock.setLit(sl, worldPosition, getBlockState(), false);
-        }
-        super.setRemoved();
-    }
-
-    // ── NBT ──────────────────────────────────────────────────────────────────
-
-    @Override
-    protected void saveAdditional(CompoundTag tag,
-                                  net.minecraft.core.HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
+    public void write(CompoundTag tag, boolean clientPacket) {
+        super.write(tag, clientPacket);
         tag.putBoolean("lit", isLit);
-        int n = placedLights.size();
-        int[] xs = new int[n], ys = new int[n], zs = new int[n];
-        for (int i = 0; i < n; i++) {
-            xs[i] = placedLights.get(i).getX();
-            ys[i] = placedLights.get(i).getY();
-            zs[i] = placedLights.get(i).getZ();
+        if (!clientPacket) {
+            int n = placedLights.size();
+            int[] xs = new int[n], ys = new int[n], zs = new int[n];
+            for (int i = 0; i < n; i++) {
+                xs[i] = placedLights.get(i).getX();
+                ys[i] = placedLights.get(i).getY();
+                zs[i] = placedLights.get(i).getZ();
+            }
+            tag.putIntArray("lx", xs);
+            tag.putIntArray("ly", ys);
+            tag.putIntArray("lz", zs);
         }
-        tag.putIntArray("lx", xs);
-        tag.putIntArray("ly", ys);
-        tag.putIntArray("lz", zs);
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag,
-                                  net.minecraft.core.HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
+    public void read(CompoundTag tag, boolean clientPacket) {
+        super.read(tag, clientPacket);
         isLit = tag.getBoolean("lit");
-        placedLights.clear();
-        int[] xs = tag.getIntArray("lx");
-        int[] ys = tag.getIntArray("ly");
-        int[] zs = tag.getIntArray("lz");
-        for (int i = 0; i < xs.length; i++)
-            placedLights.add(new BlockPos(xs[i], ys[i], zs[i]));
+        if (!clientPacket) {
+            placedLights.clear();
+            int[] xs = tag.getIntArray("lx"),
+                  ys = tag.getIntArray("ly"),
+                  zs = tag.getIntArray("lz");
+            for (int i = 0; i < xs.length; i++)
+                placedLights.add(new BlockPos(xs[i], ys[i], zs[i]));
+        }
     }
 }
