@@ -4,76 +4,84 @@ import com.example.powergridlights.blockentity.FloodlightBlockEntity;
 import com.example.powergridlights.registry.PGLBlockEntities;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import org.patryk3211.powergrid.electricity.base.DirectionalElectricBlock;
-import org.patryk3211.powergrid.electricity.base.TerminalBoundingBox;
+import net.minecraft.world.phys.shapes.Shapes;
+import org.patryk3211.powergrid.block.base.DirectionalElectricBlock;
+import org.patryk3211.powergrid.blockentity.base.TerminalBoundingBox;
+import org.patryk3211.powergrid.blockentity.base.BlockStateTerminalCollection;
+import net.minecraft.core.component.DataComponentMap;
 
-/**
- * Refletor elétrico direcional.
- *
- * Estende DirectionalElectricBlock que:
- *  - Fornece a propriedade FACING
- *  - Gera o BlockStateTerminalCollection rotacionado automaticamente
- *  - Não estende BaseEntityBlock → não precisa de codec()
- *
- * directionalNorthTerminals(Block, TerminalBoundingBox[], VoxelShape) → 3 args.
- * A VoxelShape é usada para TODAS as direções (o helper cria variantes rotacionadas).
- */
 public class FloodlightBlock extends DirectionalElectricBlock implements IBE<FloodlightBlockEntity> {
 
-    public static final BooleanProperty LIT = BlockStateProperties.LIT;
-
-    // Plugs do modelo (coordenadas do Blockbench / 16)
-    // Plug L (esquerdo): from [4,1,10] to [6,2,12]
-    private static final TerminalBoundingBox TERM_L = new TerminalBoundingBox(
-            Component.literal("L"),
-            4/16.0, 1/16.0, 10/16.0,
-            6/16.0, 2/16.0, 12/16.0);
-
-    // Plug N (direito): from [10,1,10] to [12,2,12]
-    private static final TerminalBoundingBox TERM_N = new TerminalBoundingBox(
-            Component.literal("N"),
-            10/16.0, 1/16.0, 10/16.0,
-            12/16.0, 2/16.0, 12/16.0);
-
-    // Shape do modelo (caixa geral, válida para NORTH)
-    private static final VoxelShape SHAPE = Block.box(3, 0, 3, 13, 9, 13);
+    // Shape do bloco (caixa principal do refletor)
+    private static final VoxelShape SHAPE_NORTH = Block.box(1, 1, 4, 15, 15, 16);
+    private static final VoxelShape SHAPE_SOUTH = Block.box(1, 1, 0, 15, 15, 12);
+    private static final VoxelShape SHAPE_EAST  = Block.box(0, 1, 1, 12, 15, 15);
+    private static final VoxelShape SHAPE_WEST  = Block.box(4, 1, 1, 16, 15, 15);
+    private static final VoxelShape SHAPE_UP    = Block.box(1, 0, 1, 15, 12, 15);
+    private static final VoxelShape SHAPE_DOWN  = Block.box(1, 4, 1, 15, 16, 15);
 
     public FloodlightBlock(Properties properties) {
         super(properties);
+        registerDefaultState(defaultBlockState()
+                .setValue(BlockStateProperties.FACING, net.minecraft.core.Direction.NORTH));
 
-        // 3 args: block, terminais[], shape base (o helper rotaciona para todos os facings)
-        setTerminalCollection(
-            DirectionalElectricBlock.directionalNorthTerminals(
-                this,
-                new TerminalBoundingBox[]{ TERM_L, TERM_N },
-                SHAPE
-            ).build()
+        // Terminais: plug esquerdo e plug direito do modelo Blockbench
+        // Cubo esquerdo:  from [4,1,10] to [6,2,12]  → /16
+        // Cubo direito:   from [10,1,10] to [12,2,12] → /16
+        TerminalBoundingBox termL = new TerminalBoundingBox(
+                net.minecraft.network.chat.Component.literal("Line"),
+                4f/16, 1f/16, 10f/16,
+                6f/16, 2f/16, 12f/16
+        );
+        TerminalBoundingBox termN = new TerminalBoundingBox(
+                net.minecraft.network.chat.Component.literal("Neutral"),
+                10f/16, 1f/16, 10f/16,
+                12f/16, 2f/16, 12f/16
         );
 
-        registerDefaultState(stateDefinition.any()
-                .setValue(FACING, Direction.NORTH)
-                .setValue(LIT, false));
+        TerminalBoundingBox[] terminals = { termL, termN };
+
+        // BlockStateTerminalCollection NÃO tem .build() — é construída direto
+        BlockStateTerminalCollection collection =
+                directionalNorthTerminals(this, terminals, SHAPE_NORTH);
+
+        setTerminalCollection(collection);
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        super.createBlockStateDefinition(builder); // adiciona FACING
-        builder.add(LIT);
+        super.createBlockStateDefinition(builder);
+        builder.add(BlockStateProperties.FACING);
     }
 
-    // ── IBE ──────────────────────────────────────────────────────────────────
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext ctx) {
+        return defaultBlockState()
+                .setValue(BlockStateProperties.FACING,
+                          ctx.getNearestLookingDirection().getOpposite());
+    }
 
+    // Limpa os blocos de luz quando o refletor é removido
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos,
+                         BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock())) {
+            if (level.getBlockEntity(pos) instanceof FloodlightBlockEntity be) {
+                be.removeLights();
+            }
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    // IBE
     @Override
     public Class<FloodlightBlockEntity> getBlockEntityClass() {
         return FloodlightBlockEntity.class;
@@ -81,34 +89,6 @@ public class FloodlightBlock extends DirectionalElectricBlock implements IBE<Flo
 
     @Override
     public BlockEntityType<? extends FloodlightBlockEntity> getBlockEntityType() {
-        return PGLBlockEntities.FLOODLIGHT_BLOCK_ENTITY.get();
-    }
-
-    // ── Limpeza de luzes ao remover o bloco ──────────────────────────────────
-    // (setRemoved() é final em SmartBlockEntity → usamos onRemove() no bloco)
-
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos,
-                         BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock())
-                && level instanceof ServerLevel sl
-                && level.getBlockEntity(pos) instanceof FloodlightBlockEntity be) {
-            be.removeLights(sl);
-            setLit(sl, pos, state, false);
-        }
-        super.onRemove(state, level, pos, newState, movedByPiston);
-    }
-
-    // ── Utilidades ────────────────────────────────────────────────────────────
-
-    public static void setLit(Level level, BlockPos pos, BlockState state, boolean lit) {
-        if (state.getValue(LIT) != lit)
-            level.setBlock(pos, state.setValue(LIT, lit), Block.UPDATE_ALL);
-    }
-
-    @Override
-    public int getLightEmission(BlockState state,
-                                net.minecraft.world.level.BlockGetter level, BlockPos pos) {
-        return state.getValue(LIT) ? 4 : 0;
+        return PGLBlockEntities.FLOODLIGHT.get();
     }
 }
