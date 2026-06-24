@@ -1,5 +1,6 @@
 package com.example.powergridlights.blockentity;
 
+import com.example.powergridlights.block.FloodlightBlock;
 import com.example.powergridlights.registry.PGLBlockEntities;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import net.minecraft.core.BlockPos;
@@ -23,7 +24,7 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
 
     private static final int   TERMINAL_LINE    = 0;
     private static final int   TERMINAL_NEUTRAL = 1;
-    private static final float RESISTANCE       = 1440f; // ~10 W a 120 V
+    private static final float RESISTANCE       = 1440f;
     private static final float MIN_VOLTAGE      = 30f;
     private static final int   LIGHT_RANGE      = 14;
 
@@ -36,20 +37,18 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
     }
 
     // ---------------------------------------------------------------
-    // IElectricEntity — chamados pelo PowerGrid via reflection/interface
-    // NÃO usar @Override (o compilador não os reconhece como override em ElectricBlockEntity)
+    // IElectricEntity — chamados pelo PowerGrid via interface
     // ---------------------------------------------------------------
 
     public void buildCircuit(IElectricEntity.CircuitBuilder builder) {
         builder.setTerminalCount(2);
         FloatingNode nodeL = builder.terminalNode(TERMINAL_LINE);
         FloatingNode nodeN = builder.terminalNode(TERMINAL_NEUTRAL);
-        // connect(float, IElectricNode, IElectricNode) → ElectricWire
         wire = builder.connect(RESISTANCE, nodeL, nodeN);
     }
 
     public void electricalTick() {
-        if (wire == null) return;
+        if (wire == null || level == null) return;
         float voltage = Math.abs(wire.potentialDifference());
         boolean shouldBePowered = voltage >= MIN_VOLTAGE;
         if (shouldBePowered != powered) {
@@ -59,8 +58,7 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
     }
 
     // ---------------------------------------------------------------
-    // SmartBlockEntity — NBT
-    // Assinatura confirmada: (CompoundTag, HolderLookup.Provider, boolean)
+    // NBT
     // ---------------------------------------------------------------
 
     @Override
@@ -72,7 +70,12 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
     @Override
     public void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.read(tag, registries, clientPacket);
+        boolean wasPowered = powered;
         powered = tag.getBoolean("Powered");
+        // Se carregou do disco como ligado, reacende as luzes
+        if (powered && !wasPowered && level != null && !level.isClientSide) {
+            placeLights();
+        }
     }
 
     // ---------------------------------------------------------------
@@ -81,12 +84,14 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
 
     private void updateLights() {
         removeLights();
-        if (powered && level != null && !level.isClientSide) {
+        if (powered && !level.isClientSide) {
             placeLights();
         }
-        if (level != null) {
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
-        }
+        // Atualiza o blockstate LIT para o modelo visual
+        BlockState state = getBlockState();
+        level.setBlock(worldPosition,
+                state.setValue(FloodlightBlock.LIT, powered),
+                3);
     }
 
     private void placeLights() {
@@ -130,7 +135,6 @@ public class FloodlightBlockEntity extends ElectricBlockEntity implements IElect
             }
         }
         lightBlocks.clear();
-        powered = false;
     }
 
     @Override
