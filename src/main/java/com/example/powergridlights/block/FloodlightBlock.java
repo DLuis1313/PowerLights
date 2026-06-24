@@ -20,7 +20,6 @@ import org.patryk3211.powergrid.electricity.base.terminals.BlockStateTerminalCol
 
 public class FloodlightBlock extends DirectionalElectricBlock implements IBE<FloodlightBlockEntity> {
 
-    // Shape base apontando para NORTE
     private static final VoxelShape SHAPE_NORTH = Block.box(1, 1, 4, 15, 15, 16);
 
     public FloodlightBlock(Properties properties) {
@@ -28,8 +27,6 @@ public class FloodlightBlock extends DirectionalElectricBlock implements IBE<Flo
         registerDefaultState(defaultBlockState()
                 .setValue(BlockStateProperties.FACING, Direction.NORTH));
 
-        // TerminalBoundingBox(Component, double x1, y1, z1, double x2, y2, z2)
-        // Plugues na traseira do refletor (Z≈10-12/16 quando facing=NORTH)
         TerminalBoundingBox termLine = new TerminalBoundingBox(
                 IDecoratedTerminal.POSITIVE,
                 4d/16, 1d/16, 10d/16,
@@ -41,18 +38,13 @@ public class FloodlightBlock extends DirectionalElectricBlock implements IBE<Flo
                 12d/16, 3d/16, 12d/16
         );
 
-        // directionalNorthTerminals retorna BlockStateTerminalCollection diretamente (sem .build())
         BlockStateTerminalCollection collection =
                 directionalNorthTerminals(this, new TerminalBoundingBox[]{termLine, termNeutral}, SHAPE_NORTH);
 
         setTerminalCollection(collection);
     }
 
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        super.createBlockStateDefinition(builder);
-        builder.add(BlockStateProperties.FACING);
-    }
+    // NÃO sobrescrever createBlockStateDefinition — DirectionalElectricBlock já adiciona FACING
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext ctx) {
@@ -71,8 +63,6 @@ public class FloodlightBlock extends DirectionalElectricBlock implements IBE<Flo
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
-
-    // --- IBE ---
 
     @Override
     public Class<FloodlightBlockEntity> getBlockEntityClass() {
