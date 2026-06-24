@@ -21,8 +21,7 @@ public class PowerGridLights {
         // Register all deferred registries to the mod event bus
         PGLBlocks.BLOCKS.register(modBus);
         PGLItems.ITEMS.register(modBus);
-        PGLBlockEntities.BLOCK_ENTITIES.register(modBus);
-
+        PGLBlockEntities.BLOCK_ENTITY_TYPES.register(modBus);
         LOGGER.info("PowerGrid Lights Addon initialized.");
     }
 }
